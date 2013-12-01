@@ -1,23 +1,31 @@
 package net.gutefrage.tsdb;
 
-import com.stumbleupon.async.Deferred;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
 import net.opentsdb.core.TSDB;
 import net.opentsdb.stats.StatsCollector;
 import net.opentsdb.tsd.RTPublisher;
-import org.msgpack.MessagePack;
+
+import org.apache.http.HttpStatus;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.stumbleupon.async.Deferred;
 
 /**
  * Proof of Concept
@@ -27,16 +35,15 @@ import org.slf4j.LoggerFactory;
  * make sure that you have 2 new settings in your opentsdb.conf:
  * tsd.plugin.skyline.host = Your skyline host
  * tsd.plugin.skyline.port = Your skyline port
- * 
+ *
  */
 public class SkylinePublisher extends RTPublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(SkylinePublisher.class);
-    private DatagramSocket udpSocket;
-    private MessagePack msgpack = new MessagePack();
     private InetAddress skylineIa;
     private int skylinePort;
 
+    @Override
     public void initialize(final TSDB tsdb) {
         LOG.info("init SkylinePublisher");
 
@@ -48,24 +55,23 @@ public class SkylinePublisher extends RTPublisher {
             LOG.error("UnknownHostException in SkylinePublisher initialize");
         }
 
-        try {
-            udpSocket = new DatagramSocket();
-        } catch (SocketException e) {
-            LOG.error("SocketException in SkylinePublisher initialize");
-        }
     }
 
+    @Override
     public Deferred<Object> shutdown() {
         return new Deferred<Object>();
     }
 
+    @Override
     public String version() {
         return "2.0.1";
     }
 
+    @Override
     public void collectStats(final StatsCollector collector) {
     }
 
+    @Override
     public Deferred<Object> publishDataPoint(final String metric,
             final long timestamp, final long value, final Map<String, String> tags,
             final byte[] tsuid) {
@@ -75,6 +81,7 @@ public class SkylinePublisher extends RTPublisher {
         return new Deferred<Object>();
     }
 
+    @Override
     public Deferred<Object> publishDataPoint(final String metric,
             final long timestamp, final double value, final Map<String, String> tags,
             final byte[] tsuid) {
@@ -102,26 +109,37 @@ public class SkylinePublisher extends RTPublisher {
 
     //Sends the data to the skyline server
     private void sendSocket(String skylineMetricName, final long timestamp, final double value) {
+        CloseableHttpClient httpclient = HttpClients.createDefault();
         try {
+            HttpPost httpPost = new HttpPost("http://localhost:12312");
 
-            // Build the neeeded structure for skyline/msgpack
-            // [ metricName, [timestamp, value]]
-            List metricList = new ArrayList();
-            List datapointList = new ArrayList();
+            // Request parameters and other properties.
+            List<NameValuePair> params = new ArrayList<NameValuePair>();
+            params.add(new BasicNameValuePair("metric", skylineMetricName));
+            httpPost.setEntity(new UrlEncodedFormEntity(params));
 
-            datapointList.add(timestamp);
-            datapointList.add(value);
+            // Execute and get the response.
+            CloseableHttpResponse response = null;
+            try {
+                response = httpclient.execute(httpPost);
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode != HttpStatus.SC_OK) {
+                    throw new IOException("Non 200 status code");
+                }
+                EntityUtils.consume(response.getEntity());
+            } finally {
+                response.close();
+            }
 
-            metricList.add(skylineMetricName);
-            metricList.add(datapointList);
-
-            byte[] data = msgpack.write(metricList);
-            DatagramPacket packet = new DatagramPacket(data, data.length, skylineIa, skylinePort);
-
-            //send it!
-            udpSocket.send(packet);
         } catch (IOException e) {
             LOG.error("IOException in SkylinePublisher send");
+        } finally {
+            try {
+                httpclient.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+                LOG.error(e.getMessage());
+            }
         }
 
     }
