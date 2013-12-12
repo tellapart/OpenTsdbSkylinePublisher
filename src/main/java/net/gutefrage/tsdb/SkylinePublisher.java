@@ -98,7 +98,7 @@ public class SkylinePublisher extends RTPublisher {
     private String makeMetricName(String metric, Map<String, String> tags) {
 
         String metricName = metric;
-
+        metricName = metricName.concat("|");
         SortedSet<String> keys = new TreeSet<String>(tags.keySet());
         for (String key : keys) {
             metricName = metricName.concat("." + key + "_" + tags.get(key));
@@ -111,7 +111,7 @@ public class SkylinePublisher extends RTPublisher {
     private void sendSocket(String skylineMetricName, final long timestamp, final double value) {
         CloseableHttpClient httpclient = HttpClients.createDefault();
         try {
-            HttpPost httpPost = new HttpPost("http://localhost:12312");
+            HttpPost httpPost = new HttpPost("http://api.tellapart.com:4123/xraym");
 
             // Request parameters and other properties.
             List<NameValuePair> params = new ArrayList<NameValuePair>();
