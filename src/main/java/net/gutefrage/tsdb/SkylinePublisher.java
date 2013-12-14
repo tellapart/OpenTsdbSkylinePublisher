@@ -2,7 +2,6 @@ package net.gutefrage.tsdb;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,13 +46,13 @@ public class SkylinePublisher extends RTPublisher {
     public void initialize(final TSDB tsdb) {
         LOG.info("init SkylinePublisher");
 
-        skylinePort = tsdb.getConfig().getInt("tsd.plugin.skyline.port");
-
-        try {
-            skylineIa = InetAddress.getByName(tsdb.getConfig().getString("tsd.plugin.skyline.host"));
-        } catch (UnknownHostException e) {
-            LOG.error("UnknownHostException in SkylinePublisher initialize");
-        }
+        // skylinePort = tsdb.getConfig().getInt("tsd.plugin.skyline.port");
+        //
+        // try {
+        // skylineIa = InetAddress.getByName(tsdb.getConfig().getString("tsd.plugin.skyline.host"));
+        // } catch (UnknownHostException e) {
+        // LOG.error("UnknownHostException in SkylinePublisher initialize");
+        // }
 
     }
 
@@ -103,26 +102,32 @@ public class SkylinePublisher extends RTPublisher {
         for (String key : keys) {
             metricName = metricName.concat("." + key + "_" + tags.get(key));
         }
+        LOG.info("metric name");
+        LOG.info(metricName);
 
         return metricName;
     }
 
     //Sends the data to the skyline server
     private void sendSocket(String skylineMetricName, final long timestamp, final double value) {
+        LOG.info("sendSocket");
         CloseableHttpClient httpclient = HttpClients.createDefault();
         try {
             HttpPost httpPost =
                     new HttpPost("http://ec2-54-211-4-135.compute-1.amazonaws.com:80/xraym");
 
             // Request parameters and other properties.
+            LOG.info("About to create params");
             List<NameValuePair> params = new ArrayList<NameValuePair>();
             params.add(new BasicNameValuePair("metric", skylineMetricName));
             httpPost.setEntity(new UrlEncodedFormEntity(params));
 
             // Execute and get the response.
             CloseableHttpResponse response = null;
+            LOG.info("About to try send");
             try {
                 response = httpclient.execute(httpPost);
+                LOG.info("SENT");
                 int statusCode = response.getStatusLine().getStatusCode();
                 if (statusCode != HttpStatus.SC_OK) {
                     throw new IOException("Non 200 status code");
@@ -135,6 +140,7 @@ public class SkylinePublisher extends RTPublisher {
         } catch (IOException e) {
             LOG.error("IOException in SkylinePublisher send");
         } finally {
+            LOG.error("IN FINALLY CLAUSE");
             try {
                 httpclient.close();
             } catch (IOException e) {
