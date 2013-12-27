@@ -1,7 +1,6 @@
 package net.gutefrage.tsdb;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,33 +26,15 @@ import org.slf4j.LoggerFactory;
 import com.stumbleupon.async.Deferred;
 
 /**
- * Proof of Concept
- *
- * This OpenTSDB Plugin publishes data to a skyline UDP server
- *
- * make sure that you have 2 new settings in your opentsdb.conf:
- * tsd.plugin.skyline.host = Your skyline host
- * tsd.plugin.skyline.port = Your skyline port
- *
- */
+ * Proof of Concept This OpenTSDB Plugin publishes data to TAFE.
+ * */
 public class SkylinePublisher extends RTPublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(SkylinePublisher.class);
-    private InetAddress skylineIa;
-    private int skylinePort;
 
     @Override
     public void initialize(final TSDB tsdb) {
         LOG.info("init SkylinePublisher");
-
-        // skylinePort = tsdb.getConfig().getInt("tsd.plugin.skyline.port");
-        //
-        // try {
-        // skylineIa = InetAddress.getByName(tsdb.getConfig().getString("tsd.plugin.skyline.host"));
-        // } catch (UnknownHostException e) {
-        // LOG.error("UnknownHostException in SkylinePublisher initialize");
-        // }
-
     }
 
     @Override
@@ -92,55 +73,48 @@ public class SkylinePublisher extends RTPublisher {
 
     /*
      * a skyline metric name will be in the format of
-     * <metric>.<tag1_key>_<tag1_value>.<tag2_key>_<tag2_value>
+     * <metric>.<tag1_key>_<tag1_value>.<tag2_key>_<tag2_value> Do this instead of adding a
+     * dependency on a json library or what not for now.
      */
     private String makeMetricName(String metric, Map<String, String> tags) {
-
         String metricName = metric;
-        metricName = metricName.concat("|");
         SortedSet<String> keys = new TreeSet<String>(tags.keySet());
         for (String key : keys) {
-            metricName = metricName.concat("." + key + "_" + tags.get(key));
+            metricName = metricName.concat("|" + key + "|" + tags.get(key));
         }
-        LOG.info("metric name");
-        LOG.info(metricName);
-
         return metricName;
     }
 
     //Sends the data to the skyline server
     private void sendSocket(String skylineMetricName, final long timestamp, final double value) {
-        LOG.info("sendSocket");
         CloseableHttpClient httpclient = HttpClients.createDefault();
         try {
             HttpPost httpPost =
                     new HttpPost("http://ec2-54-211-4-135.compute-1.amazonaws.com:80/xraym");
 
             // Request parameters and other properties.
-            LOG.info("About to create params");
             List<NameValuePair> params = new ArrayList<NameValuePair>();
             params.add(new BasicNameValuePair("metric", skylineMetricName));
             httpPost.setEntity(new UrlEncodedFormEntity(params));
 
             // Execute and get the response.
             CloseableHttpResponse response = null;
-            LOG.info("About to try send");
             try {
                 response = httpclient.execute(httpPost);
-                LOG.info("SENT");
                 int statusCode = response.getStatusLine().getStatusCode();
                 if (statusCode != HttpStatus.SC_OK) {
                     throw new IOException("Non 200 status code");
                 }
+                LOG.info("Sent metric: " + skylineMetricName + " successfully");
                 EntityUtils.consume(response.getEntity());
             } finally {
                 response.close();
             }
 
         } catch (IOException e) {
-            LOG.error("IOException in SkylinePublisher send");
+            LOG.error("IOException while sending metric: " + skylineMetricName);
+            e.printStackTrace();
         } finally {
-            LOG.error("IN FINALLY CLAUSE");
             try {
                 httpclient.close();
             } catch (IOException e) {
