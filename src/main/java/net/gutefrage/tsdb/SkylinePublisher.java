@@ -23,8 +23,6 @@ import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.stumbleupon.async.Deferred;
-
 /**
  * Proof of Concept This OpenTSDB Plugin publishes data to TAFE.
  * */
@@ -89,8 +87,7 @@ public class SkylinePublisher extends RTPublisher {
     private void sendSocket(String skylineMetricName, final long timestamp, final double value) {
         CloseableHttpClient httpclient = HttpClients.createDefault();
         try {
-            HttpPost httpPost =
-                    new HttpPost("http://ec2-54-211-4-135.compute-1.amazonaws.com:80/xraym");
+            HttpPost httpPost = new HttpPost("http://api.tellapart.com:4123/xraym");
 
             // Request parameters and other properties.
             List<NameValuePair> params = new ArrayList<NameValuePair>();
